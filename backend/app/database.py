@@ -80,6 +80,19 @@ def init_db() -> None:
                         connection.execute(text("UPDATE devices SET device_id = fingerprint WHERE device_id IS NULL"))
                     if "updated_at" not in existing_cols:
                         connection.execute(text("ALTER TABLE devices ADD COLUMN updated_at DATETIME"))
+
+                # Check reviews table
+                review_cols_result = connection.execute(text("PRAGMA table_info(reviews)")).fetchall()
+                existing_review_cols = {row[1] for row in review_cols_result}
+                if existing_review_cols:
+                    if "reviewer_id" not in existing_review_cols:
+                        connection.execute(text("ALTER TABLE reviews ADD COLUMN reviewer_id VARCHAR(64)"))
+                    if "previous_status" not in existing_review_cols:
+                        connection.execute(text("ALTER TABLE reviews ADD COLUMN previous_status VARCHAR(32)"))
+                    if "new_status" not in existing_review_cols:
+                        connection.execute(text("ALTER TABLE reviews ADD COLUMN new_status VARCHAR(32)"))
+                    if "note" not in existing_review_cols:
+                        connection.execute(text("ALTER TABLE reviews ADD COLUMN note TEXT"))
         except Exception as mig_err:
             logger.debug(f"Schema upgrade check note: {mig_err}")
 

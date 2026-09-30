@@ -55,7 +55,7 @@ def _seed_user(db: Session, user_id: str, email: str = "user@test.com") -> User:
     user = User(
         id=user_id,
         email=f"{user_id}_{email}",
-        username=f"usr_{user_id[:8]}",
+        username=f"usr_{uuid.uuid4().hex[:12]}",
         full_name="Phase 9 Test User",
     )
     db.merge(user)

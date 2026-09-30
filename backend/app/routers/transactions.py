@@ -3,16 +3,18 @@
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
+from app.logging_config import logger
 from app.models.device import Device
-from app.models.enums import FlagSeverity, RiskLevel, TransactionStatus, ReviewStatus
+from app.models.enums import FlagSeverity, RiskLevel, TransactionStatus, ReviewStatus, ReviewState, ReviewDecision
 from app.models.fraud_flag import FraudFlag
 from app.models.fraud_rule_result import FraudRuleResult
 from app.models.login_attempt import LoginAttempt
+from app.models.review import Review
 from app.models.transaction import Transaction
 from app.models.user import User
 
@@ -20,13 +22,15 @@ from app.behaviour.service import UserBehaviourProfileService
 from app.devices.service import DeviceService
 from app.fraud.context import RuleContext
 from app.fraud import create_default_engine
-from app.fraud.scoring import RiskScorer
+from app.fraud.scoring import RiskScorer, RuleContribution, generate_explanation
 from app.security.account_takeover import AccountTakeoverDetector
 
 from app.schemas.api import (
     AccountTakeoverInfo,
     DeviceInfo,
     PaginatedTransactionsResponse,
+    ReviewHistoryResponse,
+    ReviewRecord,
     ReviewStatusUpdateRequest,
     ReviewStatusUpdateResponse,
     RiskInfo,
@@ -432,14 +436,37 @@ def get_transaction_detail(
 
     # Format rule results
     rule_results_data = []
+    contributions = []
     for r in tx.rule_results:
+        reason = (r.details or {}).get("reason") or (
+            f"Rule '{r.rule_name}' was triggered" if r.is_triggered else "Rule conditions not met"
+        )
+        evidence = (r.details or {}).get("evidence") or {}
+        score_contrib = float((r.details or {}).get("score_contribution") or 0.0)
+
         rule_results_data.append({
             "rule_id": r.rule_id,
             "rule_name": r.rule_name,
             "is_triggered": r.is_triggered,
             "severity": r.severity.value if hasattr(r.severity, "value") else str(r.severity),
+            "reason": reason,
+            "evidence": evidence,
+            "score_contribution": score_contrib,
             "details": r.details or {},
         })
+
+        if r.is_triggered:
+            contributions.append(
+                RuleContribution(
+                    rule_id=r.rule_id,
+                    rule_name=r.rule_name,
+                    score=score_contrib,
+                    reason=reason,
+                    evidence=evidence,
+                )
+            )
+
+    explanation = generate_explanation(tx.risk_score, tx.risk_level, contributions)
 
     # Format fraud flags
     fraud_flags_data = []
@@ -451,6 +478,34 @@ def get_transaction_detail(
             "reason": f.reason,
             "created_at": f.created_at.isoformat() if f.created_at else None,
         })
+
+    # Device recognition state
+    is_new_device = any(
+        r.rule_id == "device_change" and r.is_triggered for r in tx.rule_results
+    )
+    if not is_new_device and tx.device and tx.device.first_seen_at and tx.device.last_seen_at:
+        is_new_device = tx.device.first_seen_at == tx.device.last_seen_at
+
+    # Account takeover assessment
+    ato_signals = {
+        "new_device": is_new_device or any(r.rule_id == "device_change" and r.is_triggered for r in tx.rule_results),
+        "new_location": any(r.rule_id in ("impossible_geographical_location", "blacklisted_country") and r.is_triggered for r in tx.rule_results),
+        "unusual_time": any(r.rule_id == "unusual_time" and r.is_triggered for r in tx.rule_results),
+        "failed_login": any(r.rule_id == "multiple_failed_login" and r.is_triggered for r in tx.rule_results),
+        "unusual_transaction": any(r.rule_id in ("unusual_transaction_amount", "transaction_velocity") and r.is_triggered for r in tx.rule_results),
+    }
+    signal_count = sum(1 for v in ato_signals.values() if v)
+    is_at_risk = signal_count >= 2
+    ato_level = (
+        "CRITICAL"
+        if signal_count >= 4
+        else ("HIGH" if signal_count >= 3 else ("MEDIUM" if signal_count >= 2 else "LOW"))
+    )
+    ato_explanation = (
+        f"Potential account takeover risk detected because {signal_count} suspicious signals were observed."
+        if is_at_risk
+        else "No significant compound account takeover pattern detected."
+    )
 
     return {
         "id": tx.id,
@@ -471,10 +526,31 @@ def get_transaction_detail(
             "device_id": tx.device.device_id if tx.device else tx.device_id,
             "browser": tx.device.browser if tx.device else None,
             "operating_system": tx.device.operating_system if tx.device else None,
+            "ip_address": tx.device.ip_address if tx.device else tx.ip_address,
+            "is_new": is_new_device,
+            "is_trusted": tx.device.is_trusted if tx.device else False,
+            "first_seen_at": (
+                tx.device.first_seen_at.isoformat()
+                if tx.device and tx.device.first_seen_at
+                else None
+            ),
+            "last_seen_at": (
+                tx.device.last_seen_at.isoformat()
+                if tx.device and tx.device.last_seen_at
+                else None
+            ),
         },
         "risk": {
             "score": tx.risk_score,
             "level": tx.risk_level.value if hasattr(tx.risk_level, "value") else str(tx.risk_level),
+            "explanation": explanation,
+        },
+        "account_takeover": {
+            "is_at_risk": is_at_risk,
+            "risk_level": ato_level,
+            "signal_count": signal_count,
+            "signals": ato_signals,
+            "explanation": ato_explanation,
         },
         "status": tx.status.value if hasattr(tx.status, "value") else str(tx.status),
         "review_status": (
@@ -487,19 +563,33 @@ def get_transaction_detail(
     }
 
 
+# Valid status transitions for the reviewer workflow (Phase 12)
+VALID_STATUS_TRANSITIONS: Dict[str, set] = {
+    "PENDING_REVIEW": {"REVIEWED", "CLEARED", "ESCALATED"},
+    "NOT_REQUIRED": {"REVIEWED", "CLEARED", "ESCALATED"},
+    "UNDER_REVIEW": {"REVIEWED", "CLEARED", "ESCALATED"},
+    "IN_REVIEW": {"REVIEWED", "CLEARED", "ESCALATED"},
+    "REVIEWED": {"CLEARED", "ESCALATED"},
+    "CLEARED": {"ESCALATED"},
+    "ESCALATED": {"REVIEWED", "CLEARED"},
+}
+
+
 @router.patch(
     "/{id}/status",
     response_model=ReviewStatusUpdateResponse,
     status_code=status.HTTP_200_OK,
     summary="Update Transaction Review Status",
-    description="Updates the review status (e.g. CLEARED, REVIEWED, PENDING_REVIEW, ESCALATED) of a transaction.",
+    description="Validates and updates review status, persists an immutable Review audit record, and updates the transaction atomically.",
 )
 def update_transaction_status(
     id: str,
     payload: ReviewStatusUpdateRequest,
+    x_reviewer_id: Optional[str] = Header(None, alias="X-Reviewer-ID"),
     db: Session = Depends(get_db),
 ) -> ReviewStatusUpdateResponse:
-    """Updates review status of a transaction."""
+    """Updates review status of a transaction and persists an auditable Review history record."""
+    # 1. Locate target transaction
     tx = db.query(Transaction).filter(
         (Transaction.id == id) | (Transaction.transaction_reference == id)
     ).first()
@@ -510,6 +600,7 @@ def update_transaction_status(
             detail=f"Transaction with ID '{id}' was not found.",
         )
 
+    # 2. Validate target status
     target_status = payload.status.upper().strip()
     valid_statuses = {s.value for s in ReviewStatus}
 
@@ -522,11 +613,78 @@ def update_transaction_status(
             ),
         )
 
-    prev_status = tx.review_status.value if hasattr(tx.review_status, "value") else str(tx.review_status)
-    tx.review_status = ReviewStatus(target_status)
-    tx.updated_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(tx)
+    # 3. Determine current status and validate state transition
+    prev_status = (
+        tx.review_status.value
+        if hasattr(tx.review_status, "value")
+        else str(tx.review_status)
+    )
+
+    if prev_status == target_status:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Transaction is already in status '{target_status}'.",
+        )
+
+    allowed_targets = VALID_STATUS_TRANSITIONS.get(prev_status, set())
+    if target_status not in allowed_targets:
+        if prev_status == "CLEARED":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Transaction is already CLEARED and cannot be reopened as REVIEWED or PENDING_REVIEW.",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid review status transition from '{prev_status}' to '{target_status}'.",
+        )
+
+    # 4. Validate and sanitize reviewer note
+    cleaned_note: Optional[str] = None
+    if payload.note is not None:
+        stripped = payload.note.strip()
+        if len(stripped) > 2000:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Reviewer note exceeds maximum length of 2000 characters.",
+            )
+        cleaned_note = stripped if stripped else None
+
+    # 5. Determine reviewer identity (development fallback "reviewer-demo")
+    reviewer = (
+        x_reviewer_id.strip()
+        if x_reviewer_id and x_reviewer_id.strip()
+        else "reviewer-demo"
+    )
+
+    # 6. Atomic persistence of Review audit record and Transaction status
+    now_utc = datetime.now(timezone.utc)
+    review_record = Review(
+        id=str(uuid.uuid4()),
+        transaction_id=tx.id,
+        reviewer_id=reviewer,
+        previous_status=prev_status,
+        new_status=target_status,
+        note=cleaned_note,
+        notes=cleaned_note,
+        status=ReviewState.CLOSED if target_status == "CLEARED" else ReviewState.IN_PROGRESS,
+        created_at=now_utc,
+        updated_at=now_utc,
+    )
+
+    try:
+        db.add(review_record)
+        tx.review_status = ReviewStatus(target_status)
+        tx.updated_at = now_utc
+        db.commit()
+        db.refresh(tx)
+        db.refresh(review_record)
+    except Exception as exc:
+        db.rollback()
+        logger.error(f"Failed to atomically record review and update transaction status: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update transaction status due to a database persistence error.",
+        )
 
     return ReviewStatusUpdateResponse(
         id=tx.id,
@@ -534,4 +692,61 @@ def update_transaction_status(
         previous_review_status=prev_status,
         review_status=target_status,
         updated_at=tx.updated_at,
+        review=ReviewRecord(
+            id=review_record.id,
+            transaction_id=review_record.transaction_id,
+            reviewer_id=review_record.reviewer_id or reviewer,
+            previous_status=review_record.previous_status or prev_status,
+            new_status=review_record.new_status or target_status,
+            note=review_record.note,
+            created_at=review_record.created_at,
+        ),
+    )
+
+
+@router.get(
+    "/{id}/reviews",
+    response_model=ReviewHistoryResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get Transaction Review History",
+    description="Returns the complete, immutable review history for the given transaction, ordered newest first.",
+)
+def get_transaction_reviews(
+    id: str,
+    db: Session = Depends(get_db),
+) -> ReviewHistoryResponse:
+    """Returns the complete review audit trail for a transaction, sorted newest first."""
+    tx = db.query(Transaction).filter(
+        (Transaction.id == id) | (Transaction.transaction_reference == id)
+    ).first()
+
+    if tx is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Transaction with ID '{id}' was not found.",
+        )
+
+    reviews = (
+        db.query(Review)
+        .filter(Review.transaction_id == tx.id)
+        .order_by(Review.created_at.desc())
+        .all()
+    )
+
+    review_items = [
+        ReviewRecord(
+            id=r.id,
+            transaction_id=r.transaction_id,
+            reviewer_id=r.reviewer_id or "reviewer-demo",
+            previous_status=r.previous_status or "PENDING_REVIEW",
+            new_status=r.new_status or (r.status.value if hasattr(r.status, "value") else str(r.status)),
+            note=r.note or r.notes,
+            created_at=r.created_at,
+        )
+        for r in reviews
+    ]
+
+    return ReviewHistoryResponse(
+        transaction_id=tx.id,
+        reviews=review_items,
     )

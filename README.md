@@ -2,9 +2,8 @@
 
 FraudShield is an explainable fraud detection and investigation platform designed to assess transaction risk, highlight fraudulent patterns with transparent explanations, and provide reviewer workflows.
 
-> **Status: Phase 9 — Fraud APIs Complete**  
-> This repository contains the complete persistence layer (Phase 2), modular fraud rule engine (Phase 3), explainable risk scoring service (Phase 4), user behaviour profiling (Phase 5), software-based device tracking (Phase 6), account takeover correlation detection (Phase 7), chronological transaction journey timelines (Phase 8), and full frontend-ready REST API orchestration layer (Phase 9).  
-> *Phase 10: Complete React Reviewer Dashboard UI.*
+> **Status: Phase 11 — "Why Flagged?" Investigation UI Complete**  
+> This repository contains the complete persistence layer (Phase 2), modular fraud rule engine (Phase 3), explainable risk scoring service (Phase 4), user behaviour profiling (Phase 5), software-based device tracking (Phase 6), account takeover correlation detection (Phase 7), chronological transaction journey timelines (Phase 8), full REST API layer (Phase 9), complete React Reviewer Console (Phase 10), and deep explainable transaction investigation screen (Phase 11).
 
 ---
 
@@ -841,6 +840,39 @@ Phase 9 exposes the entire FraudShield intelligence engine through clean, consis
 
 ---
 
+## 🖥️ Phase 10 — React Reviewer Console
+
+Phase 10 provides the primary user interface for fraud analysts and reviewers. It is built in React 19 + TypeScript + Tailwind CSS and interacts with the Phase 9 REST API layer without duplicating backend fraud logic.
+
+### 1. Architectural Highlights
+- **Real-Time KPI Dashboard**: Displays 7 core operational metrics fetched directly from `GET /api/dashboard/stats`: Total Transactions, Flagged, High Risk, Critical, Pending Review, Reviewed, and Cleared.
+- **Accessible Visual Hierarchy**: Risk tiers (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`) use prominent badges combining semantic iconography, distinctive border/surface colors, and accessible text labels (never relying on color alone).
+- **Interactive Review Queue Table**: Displays 8 essential columns: Transaction ID, User ID, Formatted Currency Amount, Geolocation, Risk Score, Risk Level badge, Review Status badge, and Localized Timestamp.
+- **Backend-Driven Filtering & Pagination**: Paginated via `GET /api/transactions` with query-driven filtering (Risk Tier, Review Status, User ID search) and pagination controls (`Previous`, page indicator, `Next`).
+- **Quick Status Workflow**: Exposes atomic status updates via `PATCH /api/transactions/{id}/status` with in-flight spinner feedback, immediate UI refresh of both the table and KPI cards, and error handling.
+- **Extensible Routing**: React Router v7 routes (`/dashboard`, `/transactions/:id`, `/journey`, `/system`) with clickable transaction rows that smoothly navigate to transaction detail shells.
+
+---
+
+## 🔍 Phase 11 — "Why Flagged?" Investigation UI
+
+Phase 11 introduces the deep forensic investigation workspace (`/transactions/:id`) for FraudShield. Reviewers transitioning from the Phase 10 queue immediately understand the complete context and explainable story behind any flagged transaction.
+
+### 1. Key Principles
+- **Backend as Single Source of Truth**: The React UI performs zero fraud score calculations, rule evaluations, or risk determinations. It renders backend assessments (`risk.score`, `rule_results`, `evidence`, `account_takeover`).
+- **Explainability Storytelling**: Transforms isolated heuristics into an intuitive investigation story:
+  1. **Top Banner**: Reference, user ID, formatted currency, geolocation, and inline review status updater.
+  2. **"Why Flagged?" Section**: Prominent visual gauge (`/ 100`), `RiskBadge` with CRITICAL emphasis, and human-readable explanation summary.
+  3. **Triggered Rules Accordion**: Score contributions (`+25`, `+30`), rule names, human-readable reasons, and expandable evidence blocks.
+  4. **Safe Evidence Renderer**: Dynamically formats strings, numbers, currencies, ratios, arrays, and nested structures with an optional raw JSON technical view.
+  5. **User Behaviour Baseline**: Displays normal transaction ranges, frequency, active hours, and highlights anomalies (e.g. 12× user average, unrecognized city, off-hours activity).
+  6. **Device Intelligence**: Displays device ID, browser, OS, network IP, detection history, and visual `NEW DEVICE ⚠️` vs `KNOWN DEVICE` classification.
+  7. **Account Takeover Assessment**: Independent ATO threat level and 5-signal correlation checklist (New Device, Unusual Time, New Location, Failed Login, Amount Surge).
+  8. **Chronological Journey**: Directly embeds the Phase 8 `TransactionJourney` timeline showing preceding and succeeding events.
+- **Decoupled Failure Tolerance**: Secondary requests (e.g., user behaviour profile or journey) do not block or break the main transaction investigation screen.
+
+---
+
 ## 🧪 Phase Acceptance Checklist
 
 - [x] **Phase 1**: FastAPI skeleton, SQLite connectivity, Alembic config, health checks
@@ -851,16 +883,33 @@ Phase 9 exposes the entire FraudShield intelligence engine through clean, consis
 - [x] **Phase 6**: Software-based Device Fingerprinting & lifecycle-ordered device change detection
 - [x] **Phase 7**: Temporal anomaly detection & compound Account Takeover (ATO) correlation
 - [x] **Phase 8**: Chronological Transaction Journey timeline aggregation
-- [x] **Phase 9 — Fraud APIs**:
-  - [x] `POST /api/transactions` ingests and orchestrates full fraud detection pipeline
-  - [x] `GET /api/transactions` supports pagination and multi-parameter filtering
-  - [x] `GET /api/transactions/{id}` returns complete transaction forensic details
-  - [x] `PATCH /api/transactions/{id}/status` updates and persists review lifecycle transitions
-  - [x] `GET /api/users/{id}/profile` exposes user behavioural baselines
-  - [x] `GET /api/users/{id}/journey` exposes chronological user activity timeline
-  - [x] `GET /api/transactions/{id}/journey` remains 100% backwards-compatible
-  - [x] `GET /api/dashboard/stats` calculates real database aggregates with zero fake statistics
-  - [x] `GET /api/analytics/fraud` aggregates risk, rule trigger, and temporal distributions
-  - [x] `GET /api/rules` reflects live `RuleRegistry` configurations
-  - [x] `GET /api/rules/performance` computes evaluation rates and score metrics from persisted results
-  - [x] 175/175 Pytest tests pass cleanly across all phases (100% pass rate)
+- [x] **Phase 9 — Fraud APIs**: Complete REST API orchestration layer (175/175 Pytest tests passing)
+- [x] **Phase 10 — React Reviewer Console**:
+  - [x] Reviewer Dashboard with 7 core KPI stat cards from `GET /api/dashboard/stats`
+  - [x] No hardcoded numbers or fake statistics; real data source of truth
+  - [x] Transaction Table displaying all 8 columns: ID, User, Amount, Location, Score, Level, Status, Time
+  - [x] Accessible `RiskBadge` with text labels and semantic styling
+  - [x] Human-readable `StatusBadge` covering all supported review/transaction statuses
+  - [x] Reusable currency and localized timestamp formatters (INR, USD, ISO-8601)
+  - [x] Backend-driven pagination and multi-parameter filtering
+  - [x] Skeletons, empty states, and retryable error states
+  - [x] Row interaction navigating to `/transactions/:id` detail shell
+  - [x] Quick status update action with in-place feedback and dashboard refresh
+  - [x] 30/30 Vitest frontend tests passing across 6 test suites
+  - [x] 175/175 Pytest backend tests passing with 0 regressions
+- [x] **Phase 11 — "Why Flagged?" Investigation UI**:
+  - [x] Main route `/transactions/:id` connected to transaction table row click
+  - [x] Prominent investigation header with amount, user, location, timestamp, and review status
+  - [x] Visual risk score gauge (`/ 100`) and prominent severity badge (CRITICAL, HIGH, MEDIUM, LOW)
+  - [x] "Why Flagged?" core narrative explaining detection results in plain English
+  - [x] Triggered rules breakdown displaying rule names, score contributions (`+25`, `+30`, `+35`), and reasons
+  - [x] Safe, generic evidence renderer formatting numbers, strings, booleans, arrays, and nested objects cleanly
+  - [x] Expandable/collapsible rule cards with "Expand all" / "Collapse all" controls and raw JSON toggle
+  - [x] User Behaviour Profile section with baseline comparison chips highlighting deviations (ratio, location, hours)
+  - [x] Device Information section showing client environment, IP, timestamps, and `NEW DEVICE ⚠️` warning badge
+  - [x] Account Takeover (ATO) card with compound threat level and 5-signal checklist
+  - [x] Embedded Phase 8 `TransactionJourney` component displaying complete chronological context
+  - [x] Decoupled loading states, skeletons, and graceful fallback with retry for profile
+  - [x] Inline status transition action with backend persistence via `PATCH /api/transactions/{id}/status`
+  - [x] 48/48 Vitest frontend tests passing across 13 test suites
+  - [x] 175/175 Pytest backend tests passing with 0 regressions

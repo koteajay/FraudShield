@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.device import Device
-from app.models.enums import RiskLevel, ReviewStatus
+from app.models.enums import RiskLevel, ReviewStatus, TransactionStatus
 from app.models.fraud_flag import FraudFlag
 from app.models.fraud_rule_result import FraudRuleResult
 from app.models.transaction import Transaction
@@ -54,6 +54,13 @@ def get_dashboard_stats(
         flag_query = flag_query.filter(FraudFlag.created_at <= end_date)
 
     total_transactions = tx_query.count()
+
+    flagged_count = tx_query.filter(
+        or_(
+            Transaction.status == TransactionStatus.FLAGGED,
+            Transaction.risk_level.in_([RiskLevel.HIGH, RiskLevel.CRITICAL]),
+        )
+    ).count()
 
     pending_review = tx_query.filter(
         Transaction.review_status == ReviewStatus.PENDING_REVIEW
@@ -102,6 +109,7 @@ def get_dashboard_stats(
 
     return DashboardStatsResponse(
         total_transactions=total_transactions,
+        flagged=flagged_count,
         pending_review=pending_review,
         high_risk_transactions=high_risk_transactions,
         critical_risk_transactions=critical_risk_transactions,

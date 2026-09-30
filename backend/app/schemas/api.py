@@ -98,10 +98,30 @@ class PaginatedTransactionsResponse(BaseModel):
     total_pages: int
 
 
+class ReviewRecord(BaseModel):
+    """Auditable review history entry."""
+
+    id: str
+    transaction_id: str
+    reviewer_id: str
+    previous_status: str
+    new_status: str
+    note: Optional[str] = None
+    created_at: datetime
+
+
+class ReviewHistoryResponse(BaseModel):
+    """Collection of immutable review audit entries for a transaction."""
+
+    transaction_id: str
+    reviews: List[ReviewRecord]
+
+
 class ReviewStatusUpdateRequest(BaseModel):
     """Payload schema for updating a transaction's review status."""
 
-    status: str = Field(..., description="Target status: PENDING_REVIEW, REVIEWED, CLEARED, ESCALATED, etc.")
+    status: str = Field(..., description="Target status: PENDING_REVIEW, REVIEWED, CLEARED")
+    note: Optional[str] = Field(None, max_length=2000, description="Reviewer investigation notes (max 2000 chars)")
 
 
 class ReviewStatusUpdateResponse(BaseModel):
@@ -112,6 +132,7 @@ class ReviewStatusUpdateResponse(BaseModel):
     previous_review_status: str
     review_status: str
     updated_at: datetime
+    review: Optional[ReviewRecord] = None
 
 
 # ---------------------------------------------------------------------------
@@ -122,6 +143,7 @@ class DashboardStatsResponse(BaseModel):
     """High-level KPIs and volume metrics for reviewer dashboard."""
 
     total_transactions: int
+    flagged: int = 0
     pending_review: int
     high_risk_transactions: int
     critical_risk_transactions: int

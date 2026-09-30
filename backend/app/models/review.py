@@ -82,6 +82,29 @@ class Review(Base):
         nullable=True,
         doc="Senior analyst, compliance team, or supervisor ID escalated to",
     )
+    # Reviewer workflow audit fields (Phase 12)
+    reviewer_id: Mapped[Optional[str]] = mapped_column(
+        String(64),
+        index=True,
+        nullable=True,
+        default="reviewer-demo",
+        doc="Identifier of the reviewer recording the action",
+    )
+    previous_status: Mapped[Optional[str]] = mapped_column(
+        String(32),
+        nullable=True,
+        doc="Previous review status prior to transition",
+    )
+    new_status: Mapped[Optional[str]] = mapped_column(
+        String(32),
+        nullable=True,
+        doc="New review status after transition",
+    )
+    note: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        doc="Reviewer investigation notes",
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
