@@ -1,12 +1,9 @@
-export interface HealthResponse {
-  status: string;
-}
+/**
+ * Re-export all type definitions from a single entry point.
+ */
 
-export interface ApiInfoResponse {
-  name: string;
-  version: string;
-  environment: string;
-  status: string;
-}
-
-export type ConnectionStatus = 'checking' | 'connected' | 'error';
+export * from './api';
+export * from './transaction';
+export * from './fraud';
+export * from './user';
+export * from './dashboard';

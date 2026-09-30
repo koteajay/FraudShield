@@ -41,7 +41,7 @@ export const ConnectionStatusCard: React.FC<Props> = ({
             {status === 'error' && (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/30">
                 <XCircle className="w-4 h-4" />
-                Disconnected/Error
+                Disconnected
               </span>
             )}
             {status === 'checking' && (
