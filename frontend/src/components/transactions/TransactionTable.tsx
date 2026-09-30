@@ -164,7 +164,7 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                   <td className="py-3.5 px-4 text-right">
                     <Link
                       to={`/transactions/${txn.id}`}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600/15 text-blue-400 hover:bg-blue-600 hover:text-white border border-blue-500/20 hover:border-blue-500 transition-all duration-150 cursor-pointer shadow-sm"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600/15 text-blue-400 hover:bg-blue-600 hover:text-slate-50 border border-blue-500/20 hover:border-blue-500 transition-all duration-150 cursor-pointer shadow-sm"
                       aria-label={`Investigate transaction ${txn.id}`}
                     >
                       <span>Investigate</span>

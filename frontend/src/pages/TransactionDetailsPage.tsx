@@ -178,7 +178,7 @@ export const TransactionDetailsPage: React.FC = () => {
         </p>
         <Link
           to="/dashboard"
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-500 transition shadow-md"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-slate-50 text-xs font-semibold hover:bg-blue-500 transition shadow-md"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Return to Dashboard</span>
@@ -276,7 +276,7 @@ export const TransactionDetailsPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setIsWhyFlaggedOpen(true)}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-sm font-bold shadow-lg shadow-blue-900/30 border border-blue-400/30 transition-all duration-150 cursor-pointer active:scale-95"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-slate-50 text-sm font-bold shadow-lg shadow-blue-900/30 border border-blue-400/30 transition-all duration-150 cursor-pointer active:scale-95"
             aria-label="Open Why Flagged investigation panel"
           >
             <Sparkles className="w-4 h-4 text-blue-200 animate-pulse" />

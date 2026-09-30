@@ -130,7 +130,7 @@ export const HomePage: React.FC = () => {
               onClick={() => setActiveUiDemo('loading')}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                 activeUiDemo === 'loading'
-                  ? 'bg-blue-600 text-white shadow-sm'
+                  ? 'bg-blue-600 text-slate-50 shadow-sm'
                   : 'bg-slate-800 text-slate-400 hover:text-white'
               }`}
             >
@@ -141,7 +141,7 @@ export const HomePage: React.FC = () => {
               onClick={() => setActiveUiDemo('error')}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                 activeUiDemo === 'error'
-                  ? 'bg-rose-600 text-white shadow-sm'
+                  ? 'bg-rose-600 text-slate-50 shadow-sm'
                   : 'bg-slate-800 text-slate-400 hover:text-white'
               }`}
             >
@@ -152,7 +152,7 @@ export const HomePage: React.FC = () => {
               onClick={() => setActiveUiDemo('empty')}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                 activeUiDemo === 'empty'
-                  ? 'bg-slate-700 text-white shadow-sm'
+                  ? 'bg-slate-700 text-slate-50 shadow-sm'
                   : 'bg-slate-800 text-slate-400 hover:text-white'
               }`}
             >
