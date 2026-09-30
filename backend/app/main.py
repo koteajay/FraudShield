@@ -16,7 +16,18 @@ from app.exceptions import (
     validation_exception_handler,
 )
 from app.logging_config import logger, setup_logging
-from app.routers import health
+from app.routers import (
+    health,
+    behaviour,
+    devices,
+    security,
+    transactions,
+    users,
+    dashboard,
+    analytics,
+    rules,
+)
+from app.journey import router as journey_router
 from app.schemas.health import ApiInfoResponse
 
 settings = get_settings()
@@ -71,6 +82,15 @@ app.add_middleware(
 # Include routers
 app.include_router(health.router)  # Provides GET /health
 app.include_router(health.router, prefix=settings.API_PREFIX)  # Also provides GET /api/health
+app.include_router(behaviour.router, prefix=settings.API_PREFIX)  # Provides GET /api/users/{id}/behaviour-profile
+app.include_router(devices.router, prefix=settings.API_PREFIX)  # Provides GET /api/users/{id}/devices
+app.include_router(security.router, prefix=settings.API_PREFIX)  # Provides GET /api/users/{id}/account-takeover-risk
+app.include_router(journey_router, prefix=settings.API_PREFIX)  # Provides GET /api/transactions/{id}/journey
+app.include_router(transactions.router, prefix=settings.API_PREFIX)  # Provides /api/transactions
+app.include_router(users.router, prefix=settings.API_PREFIX)  # Provides /api/users/{id}/profile & /journey
+app.include_router(dashboard.router, prefix=settings.API_PREFIX)  # Provides /api/dashboard/stats
+app.include_router(analytics.router, prefix=settings.API_PREFIX)  # Provides /api/analytics/fraud
+app.include_router(rules.router, prefix=settings.API_PREFIX)  # Provides /api/rules & /api/rules/performance
 
 
 @app.get(

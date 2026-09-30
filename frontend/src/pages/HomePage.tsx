@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ConnectionStatusCard } from '../components/ConnectionStatusCard';
 import { ArchitectureCard } from '../components/ArchitectureCard';
+import { TransactionJourney } from '../components/transaction-journey';
 import { checkBackendHealth, fetchApiInfo, API_BASE_URL } from '../services/api';
 import type { ConnectionStatus, HealthResponse, ApiInfoResponse } from '../types';
-import { ShieldCheck, Info } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 
 export const HomePage: React.FC = () => {
   const [status, setStatus] = useState<ConnectionStatus>('checking');
@@ -54,18 +55,18 @@ export const HomePage: React.FC = () => {
   }, [testConnection]);
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-10">
+    <div className="max-w-6xl mx-auto px-6 py-10 space-y-10">
       {/* Hero Banner */}
-      <div className="text-center max-w-2xl mx-auto mb-10">
+      <div className="text-center max-w-2xl mx-auto">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-semibold mb-4">
           <ShieldCheck className="w-3.5 h-3.5" />
-          FraudShield Project Initialized
+          FraudShield Platform Active
         </div>
         <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
           Fraud Detection &amp; Investigation Platform
         </h2>
         <p className="mt-3 text-slate-400 text-sm leading-relaxed">
-          Phase 0 Foundation — Scalable architecture separating the FastAPI backend, SQLAlchemy SQLite engine, and React/Vite client interface.
+          Comprehensive fraud review platform featuring extensible heuristic rules, explainable risk scoring, user behaviour baselines, and chronological transaction journeys.
         </p>
       </div>
 
@@ -81,16 +82,11 @@ export const HomePage: React.FC = () => {
         isLoading={isLoading}
       />
 
+      {/* Transaction Journey Reviewer Tool (Phase 8) */}
+      <TransactionJourney />
+
       {/* Architecture Overview */}
       <ArchitectureCard />
-
-      {/* Notice Banner */}
-      <div className="mt-8 p-4 rounded-xl bg-slate-900/40 border border-slate-800 flex items-start gap-3 text-xs text-slate-400">
-        <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-        <div>
-          <span className="font-semibold text-slate-300">Phase 0 Scope Adherence:</span> Business logic, fraud models (User, Transaction, FraudFlag, Device), rules engine, scoring algorithms, and authentication are strictly intentionally omitted in this phase and will be added in subsequent phases.
-        </div>
-      </div>
     </div>
   );
 };

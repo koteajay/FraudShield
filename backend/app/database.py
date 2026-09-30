@@ -63,8 +63,25 @@ def init_db() -> None:
     that do not already exist, and never drops or resets existing data.
     """
     try:
-        # Create non-existent tables if any models are defined in future phases
+        # Import models so they are registered on Base.metadata
+        import app.models  # noqa: F401
+
+        # Create non-existent tables if any models are defined
         Base.metadata.create_all(bind=engine)
+
+        # Ensure schema updates for existing SQLite tables (non-destructive)
+        try:
+            with engine.begin() as connection:
+                cols_result = connection.execute(text("PRAGMA table_info(devices)")).fetchall()
+                existing_cols = {row[1] for row in cols_result}
+                if existing_cols:
+                    if "device_id" not in existing_cols:
+                        connection.execute(text("ALTER TABLE devices ADD COLUMN device_id VARCHAR(128)"))
+                        connection.execute(text("UPDATE devices SET device_id = fingerprint WHERE device_id IS NULL"))
+                    if "updated_at" not in existing_cols:
+                        connection.execute(text("ALTER TABLE devices ADD COLUMN updated_at DATETIME"))
+        except Exception as mig_err:
+            logger.debug(f"Schema upgrade check note: {mig_err}")
 
         # Verify connectivity
         with engine.connect() as connection:
@@ -74,3 +91,4 @@ def init_db() -> None:
     except Exception as exc:
         logger.error(f"Failed to initialize database: {exc}")
         raise
+
