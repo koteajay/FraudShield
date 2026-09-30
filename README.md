@@ -2,8 +2,9 @@
 
 FraudShield is an explainable fraud detection and investigation platform designed to assess transaction risk, highlight fraudulent patterns with transparent explanations, and provide reviewer workflows.
 
-> **Status: Phase 0 Complete**  
-> This repository contains the Phase 0 foundational architecture. Fraud detection engines, database models, rules, risk scoring, and reviewer workflows will be introduced in subsequent phases.
+> **Status: Phase 1 — Backend Foundation Complete**  
+> This repository contains the core backend architecture including FastAPI, SQLAlchemy SQLite connection foundation, Alembic migration structure, structured logging, centralized error handling, and health verification.  
+> *Application models (User, Transaction, FraudFlag, Device, Review) and fraud engine logic are intentionally reserved for subsequent phases.*
 
 ---
 
@@ -15,7 +16,9 @@ FraudShield is an explainable fraud detection and investigation platform designe
 - **ASGI Server**: Uvicorn
 - **Validation & Settings**: Pydantic v2 & Pydantic Settings
 - **ORM / Database**: SQLAlchemy 2.0 with SQLite (`sqlite:///./fraudshield.db`)
-- **Testing**: Pytest & HTTPX TestClient
+- **Database Migrations**: Alembic
+- **Testing**: Pytest & Starlette TestClient (HTTPX)
+- **Logging**: Python Standard Library `logging` with structured format
 
 ### Frontend
 - **Framework**: React 19 + TypeScript
@@ -30,26 +33,40 @@ FraudShield is an explainable fraud detection and investigation platform designe
 ```text
 fraudshield/
 ├── backend/
+│   ├── alembic/               # Alembic database migration environment
+│   │   ├── versions/          # Migration version scripts (for future models)
+│   │   ├── env.py             # Alembic migration runner with Base.metadata
+│   │   └── script.py.mako
 │   ├── app/
 │   │   ├── __init__.py        # Backend package marker
 │   │   ├── config.py          # Pydantic Settings & environment parsing
-│   │   ├── database.py        # SQLAlchemy engine, sessionmaker, & get_db
-│   │   └── main.py            # FastAPI app, CORS middleware, /health & /api
+│   │   ├── database.py        # SQLAlchemy engine, sessionmaker, get_db, init_db
+│   │   ├── logging_config.py  # Structured standard logging configuration
+│   │   ├── exceptions.py      # Centralized error handling & sanitization
+│   │   ├── routers/
+│   │   │   ├── __init__.py
+│   │   │   └── health.py      # GET /health & /api/health with DB ping
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── health.py      # HealthResponse & ApiInfoResponse schemas
+│   │   │   └── errors.py      # Standardized ErrorResponse schema
+│   │   └── main.py            # FastAPI app, lifespan, CORS, middleware
 │   ├── tests/
 │   │   ├── __init__.py
-│   │   └── test_health.py     # Unit tests for health & db connection
-│   ├── requirements.txt       # Minimal backend dependencies
+│   │   └── test_health.py     # Comprehensive test suite for Phase 1
+│   ├── alembic.ini            # Alembic config for backend directory
+│   ├── requirements.txt       # Core backend dependencies
 │   ├── .env.example           # Backend environment variable template
 │   └── .env                   # Local backend environment file (git-ignored)
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── components/        # UI components (Header, ConnectionStatusCard, etc.)
-│   │   ├── pages/             # Page views (HomePage)
+│   │   ├── components/        # Header, ConnectionStatusCard, ArchitectureCard
+│   │   ├── pages/             # HomePage
 │   │   ├── services/          # API service calling /health & /api
 │   │   ├── types/             # TypeScript interfaces
-│   │   ├── App.tsx            # Root application component
-│   │   ├── index.css          # Tailwind CSS configuration
+│   │   ├── App.tsx            # Root application layout
+│   │   ├── index.css          # Tailwind CSS styles
 │   │   └── main.tsx           # React DOM root entry
 │   ├── public/
 │   ├── package.json
@@ -60,6 +77,7 @@ fraudshield/
 │
 ├── .gitignore                 # Root gitignore (.env, node_modules, .venv, *.db)
 ├── .env.example               # Root combined environment template
+├── alembic.ini                # Root Alembic configuration
 └── README.md                  # Project documentation
 ```
 
@@ -73,6 +91,7 @@ APP_NAME=FraudShield
 APP_ENV=development
 DATABASE_URL=sqlite:///./fraudshield.db
 API_PREFIX=/api
+LOG_LEVEL=INFO
 BACKEND_HOST=127.0.0.1
 BACKEND_PORT=8000
 CORS_ORIGINS=["http://localhost:5173","http://127.0.0.1:5173"]
@@ -89,72 +108,91 @@ VITE_API_BASE_URL=http://localhost:8000
 
 ### 1. Backend Setup & Run
 
-From the root directory:
+From the repository root:
 
 ```bash
-# 1. Create and activate a virtual environment
-python -m venv .venv
-# On Windows:
-.venv\Scripts\activate
-# On Linux/macOS:
-# source .venv/bin/activate
+# 1. Activate virtual environment
+.\.venv\Scripts\Activate.ps1
+# On Linux/macOS: source .venv/bin/activate
 
 # 2. Install backend dependencies
-pip install -r backend/requirements.txt
-
-# 3. Create .env if not already present
-cp backend/.env.example backend/.env
-
-# 4. Start the backend development server
 cd backend
+pip install -r requirements.txt
+
+# 3. Create .env if not present
+cp .env.example .env
+
+# 4. Start the FastAPI server
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 The API will be available at:
-- **Health Check**: [http://localhost:8000/health](http://localhost:8000/health)
-- **API Info**: [http://localhost:8000/api](http://localhost:8000/api)
-- **Interactive Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Health Check**: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
+- **API Information**: [http://127.0.0.1:8000/api](http://127.0.0.1:8000/api)
+- **Interactive OpenAPI Docs**: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+- **Redoc Documentation**: [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
 
-To run the backend test suite:
+#### Running Backend Tests
 ```bash
 pytest backend/tests
+```
+
+#### Running Database Migrations (Alembic)
+```bash
+cd backend
+alembic current
+# To generate a revision in Phase 2+:
+# alembic revision --autogenerate -m "create fraud tables"
+# alembic upgrade head
 ```
 
 ---
 
 ### 2. Frontend Setup & Run
 
-From the root directory:
+From the repository root:
 
 ```bash
-# 1. Navigate to frontend directory
 cd frontend
-
-# 2. Install dependencies
 npm install
-
-# 3. Create .env if not already present
-cp .env.example .env
-
-# 4. Start Vite dev server
 npm run dev
 ```
 
 The frontend client will open at:
 - [http://localhost:5173](http://localhost:5173)
 
-The page will immediately verify connectivity to the backend by calling `GET /health` and display **"Backend Status: Connected"**.
+The page verifies connectivity with the backend by requesting `GET /health` and displays:
+- **Backend Status: Connected**
+- Active Database status: `connected`
+- Measured latency and response payload
 
 ---
 
-## 🧪 Phase 0 Validation Checklist
+## 🛡️ Error Handling & Logging
 
-- [x] FastAPI starts cleanly and serves `GET /health` returning `{"status": "ok"}`
-- [x] `GET /api` returns metadata, service status, and environment
-- [x] CORS middleware configured for `http://localhost:5173`
-- [x] SQLAlchemy SQLite database engine initializes without errors
-- [x] Pytest suite passes 100% of tests (`backend/tests/test_health.py`)
-- [x] React/Vite/TypeScript frontend builds with zero errors
-- [x] Frontend successfully connects to backend `GET /health` and displays connectivity status
-- [x] All `.env` and SQLite `.db` files are strictly excluded via `.gitignore`
-- [x] Clean architecture ready for Phase 1
+All errors return a consistent, standardized JSON contract:
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed",
+    "details": []
+  }
+}
+```
+Internal unhandled errors (500) log full tracebacks to stdout without leaking sensitive stack traces to clients.
+
+---
+
+## 🧪 Phase 1 Acceptance Checklist
+
+- [x] FastAPI starts cleanly and loads configurations via Pydantic Settings
+- [x] SQLite database connection initialized safely without dropping or resetting data
+- [x] Alembic migration configuration initialized and connected to SQLAlchemy metadata
+- [x] Structured logging implemented with configurable `LOG_LEVEL`
+- [x] Global error handling returns consistent JSON contracts without leaking stack traces
+- [x] `GET /health` verifies app state and executes a lightweight database ping
+- [x] Interactive API documentation active at `/docs` and `/redoc`
+- [x] 8/8 Pytest tests pass cleanly covering health, database initialization, validation errors, and 500 error sanitization
+- [x] Frontend continues to connect seamlessly to `GET /health`
+- [x] Zero application models or fraud logic introduced ahead of time

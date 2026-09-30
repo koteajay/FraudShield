@@ -1,21 +1,47 @@
-"""Main FastAPI application entrypoint."""
+"""Main FastAPI application entrypoint for FraudShield."""
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
 from app.config import get_settings
-from app.database import verify_database_connection
+from app.database import init_db
+from app.exceptions import (
+    AppException,
+    app_exception_handler,
+    http_exception_handler,
+    unhandled_exception_handler,
+    validation_exception_handler,
+)
+from app.logging_config import logger, setup_logging
+from app.routers import health
+from app.schemas.health import ApiInfoResponse
 
 settings = get_settings()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Verify database connection on startup
-    db_connected = verify_database_connection()
-    if not db_connected:
-        print("[WARNING] Failed to establish initial database connection.")
+    """Modern lifespan context manager managing startup and shutdown tasks."""
+    # 1. Configure structured logging
+    setup_logging()
+    logger.info(f"{settings.APP_NAME} backend starting (env: {settings.APP_ENV})")
+
+    # 2. Safely initialize database connection and metadata
+    try:
+        init_db()
+    except Exception as exc:
+        logger.error(f"Fatal error during database initialization: {exc}")
+
+    # 3. Log application startup completion
+    logger.info("Application startup complete")
+
     yield
+
+    # 4. Clean shutdown handling
+    logger.info(f"{settings.APP_NAME} backend shutting down")
 
 
 app = FastAPI(
@@ -23,9 +49,17 @@ app = FastAPI(
     description="Explainable fraud detection and reviewer platform API",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
-# CORS middleware configuration
+# Register global exception handlers
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(AppException, app_exception_handler)
+app.add_exception_handler(Exception, unhandled_exception_handler)
+
+# Configure CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -34,22 +68,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-@app.get("/health", summary="Health Check")
-def health_check():
-    """Health check endpoint required by Phase 0 specification."""
-    return {"status": "ok"}
+# Include routers
+app.include_router(health.router)  # Provides GET /health
+app.include_router(health.router, prefix=settings.API_PREFIX)  # Also provides GET /api/health
 
 
-@app.get("/api", summary="API Information")
+@app.get(
+    "/api",
+    response_model=ApiInfoResponse,
+    tags=["System"],
+    summary="API Metadata",
+    description="Provides basic service status and version information.",
+)
 def api_info():
-    """API metadata and service status."""
-    return {
-        "name": settings.APP_NAME,
-        "version": "0.1.0",
-        "environment": settings.APP_ENV,
-        "status": "running",
-    }
+    """Returns general API metadata and running environment."""
+    return ApiInfoResponse(
+        name=settings.APP_NAME,
+        version="0.1.0",
+        environment=settings.APP_ENV,
+        status="running",
+    )
 
 
 if __name__ == "__main__":

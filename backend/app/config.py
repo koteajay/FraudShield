@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     DATABASE_URL: str = "sqlite:///./fraudshield.db"
     API_PREFIX: str = "/api"
+    LOG_LEVEL: str = "INFO"
     BACKEND_HOST: str = "127.0.0.1"
     BACKEND_PORT: int = 8000
     CORS_ORIGINS: List[str] = [
